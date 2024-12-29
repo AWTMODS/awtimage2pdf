@@ -39,7 +39,7 @@ const convertImagesToPDF = async (imagePaths, outputPath) => {
 };
 
 // Middleware to check if the user has joined the required channel
-bot.use(async (ctx, next) => {
+const checkMembership = async (ctx, next) => {
   const userId = ctx.from.id;
 
   try {
@@ -64,7 +64,9 @@ bot.use(async (ctx, next) => {
     console.error("Error checking membership:", error);
     ctx.reply("An error occurred while verifying your membership. Please try again later.");
   }
-});
+};
+
+bot.use(checkMembership);
 
 // Handle "I have joined" button
 bot.action("check_membership", async (ctx) => {
@@ -143,9 +145,6 @@ bot.on("photo", async (ctx) => {
     ctx.reply("An error occurred while processing your image. Please try again.");
   }
 });
-
-
-
 
 // Handle /done command to ask for the file name
 bot.command("done", async (ctx) => {
