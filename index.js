@@ -5,7 +5,7 @@ const path = require("path");
 const axios = require("axios");
 
 // Telegram Bot Token
-const BOT_TOKEN = "7603494053:AAHhpqQKLItdNFPoOGI-oq2ZMsDGfQ0-KrM"; // Replace with your bot token
+const BOT_TOKEN = "7940862231:AAG9jDNnRf95VmrdFey2eKETezOrHIbQ6bg"; // Replace with your bot token
 const REQUIRED_CHANNEL = "@awt_bots"; // Replace with your required channel
 
 const bot = new Telegraf(BOT_TOKEN);
