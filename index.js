@@ -248,53 +248,38 @@ const sendPdfWithRenameOption = async (ctx, pdfPath, fileName) => {
     renameFileRequest[ctx.from.id] = fileName;
   } catch (error) {
     console.error("Error sending PDF:", error);
-    ctx.reply("An error occurred while sending the PDF. Please try again.");
+    ctx.reply("Failed to send the PDF. Please try again.");
   }
 };
 
-// Handle rename button actions
-bot.action(/rename_(.+)/, async (ctx) => {
-  const fileName = ctx.match[1];
-
-  try {
-    // Remove the inline keyboard by editing the message
-    await ctx.editMessageReplyMarkup(null);
-
-    // Prompt the user for a new name
-    await ctx.reply(`Send the new name for the PDF (without extension).`);
-  } catch (error) {
-    console.error("Error handling rename action:", error);
-    ctx.reply("An error occurred while processing your request. Please try again.");
-  }
-});
-
-bot.action(/keep_(.+)/, async (ctx) => {
-  await ctx.editMessageReplyMarkup(null); // Remove the inline keyboard
-  await ctx.reply("Your file has been saved without renaming.");
-});
-
-// Utility to convert images to PDF
+// Convert images to PDF
 const convertImagesToPDF = async (imagePaths, outputPath) => {
+  const doc = new PDFDocument();
+
   return new Promise((resolve, reject) => {
-    const doc = new PDFDocument({ autoFirstPage: false });
-    const writeStream = fs.createWriteStream(outputPath);
+    const stream = fs.createWriteStream(outputPath);
 
-    doc.pipe(writeStream);
-
+    doc.pipe(stream);
     imagePaths.forEach((imagePath) => {
-      const { width, height } = doc.openImage(imagePath);
-      doc.addPage({ size: [width, height] }).image(imagePath, 0, 0, { width, height });
+      doc.image(imagePath, { fit: [500, 500], align: "center", valign: "center" });
+      doc.addPage();
     });
-
     doc.end();
 
-    writeStream.on("finish", resolve);
-    writeStream.on("error", reject);
+    stream.on("finish", resolve);
+    stream.on("error", reject);
   });
 };
 
-// Start the bot
-bot.launch().then(() => console.log("Bot is running..."));
+// Error handling
+bot.catch((err) => {
+  console.error("Bot encountered an error:", err);
+});
+
+// Start bot
+bot.launch()
+  .then(() => console.log("Bot started successfully."))
+  .catch((err) => console.error("Error starting bot:", err));
 
 process.once("SIGINT", () => bot.stop("SIGINT"));
 process.once("SIGTERM", () => bot.stop("SIGTERM"));
