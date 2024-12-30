@@ -17,18 +17,14 @@ if (!fs.existsSync(DOWNLOAD_DIR)) fs.mkdirSync(DOWNLOAD_DIR);
 // Function to convert images to PDF
 const convertImagesToPDF = async (imagePaths, outputPath) => {
   return new Promise((resolve, reject) => {
-    const doc = new PDFDocument();
+    const doc = new PDFDocument({ autoFirstPage: false });
     const writeStream = fs.createWriteStream(outputPath);
 
     doc.pipe(writeStream);
 
-    // Add each image to the PDF
     imagePaths.forEach((imagePath) => {
-      doc.addPage().image(imagePath, {
-        fit: [500, 700],
-        align: "center",
-        valign: "center",
-      });
+      const { width, height } = doc.openImage(imagePath);
+      doc.addPage({ size: [width, height] }).image(imagePath, 0, 0, { width, height });
     });
 
     doc.end();
@@ -96,26 +92,23 @@ bot.action("check_membership", async (ctx) => {
 // Handle /start command
 bot.start(async (ctx) => {
   await ctx.reply(
-    `Welcome to the Image to PDF Bot! 🤖\n\nSend me images, and I'll combine them into a single PDF for you. Once you're done sending images, type /done to create your PDF.`
+    `Welcome to the Image to PDF Bot! 🤖\n\nSend me images (jpeg, png, jpg, webp, svg) as either photos or documents, and I'll combine them into a single PDF for you. Once you're done sending images, type /done to create your PDF.`
   );
 });
 
-// Handle images sent to the bot
+// Handle images sent as photos and documents
 const userImages = {}; // Stores user sessions for collecting multiple images
 const pendingFileNameRequest = {}; // Tracks users waiting for a file name
 
-bot.on("photo", async (ctx) => {
+const handleImage = async (ctx, fileId) => {
   try {
     const userId = ctx.from.id;
 
     // Initialize user's session if not already done
     if (!userImages[userId]) userImages[userId] = [];
 
-    // Get the highest resolution of the image
-    const photo = ctx.message.photo.pop(); // Get the largest size photo
-    const fileId = photo.file_id;
     const fileUrl = await ctx.telegram.getFileLink(fileId);
-    const filePath = path.join(DOWNLOAD_DIR, `${fileId}.jpg`);
+    const filePath = path.join(DOWNLOAD_DIR, `${fileId}.jpg`); // Save all as .jpg for consistency
 
     // Download the image
     const response = await axios({
@@ -126,23 +119,55 @@ bot.on("photo", async (ctx) => {
     const writeStream = fs.createWriteStream(filePath);
     response.data.pipe(writeStream);
 
-    writeStream.on("finish", () => {
+    writeStream.on("finish", async () => {
       // Add the image to the user's session
       userImages[userId].push(filePath);
 
       // Send a single "Image received" message when the first image is processed
       if (userImages[userId].length === 1) {
-        ctx.reply("Image received! You can send more images, or type /done to create the PDF.");
+        const message = await ctx.reply("Image received! You can send more images, or type /done to create the PDF.");
+        userImages[userId].messageId = message.message_id; // Store the message ID for deletion
       }
     });
 
     writeStream.on("error", (err) => {
       console.error("Error downloading image:", err);
-      ctx.reply("Failed to process the image. Please try again.");
+      ctx.reply("Failed to process the image. Please try again.", {
+        reply_markup: Markup.inlineKeyboard([
+          Markup.button.url("Help", "https://t.me/awt_bots_chats"),
+        ]),
+      });
     });
   } catch (error) {
     console.error("Error handling image:", error);
-    ctx.reply("An error occurred while processing your image. Please try again.");
+    ctx.reply("An error occurred while processing your image. Please try again.", {
+      reply_markup: Markup.inlineKeyboard([
+        Markup.button.url("Help", "https://t.me/awt_bots_chats"),
+      ]),
+    });
+  }
+};
+
+bot.on("photo", async (ctx) => {
+  const photo = ctx.message.photo.pop(); // Get the largest size photo
+  const fileId = photo.file_id;
+  await handleImage(ctx, fileId);
+});
+
+bot.on("document", async (ctx) => {
+  const document = ctx.message.document;
+  const mimeType = document.mime_type;
+
+  // Check if the file is an image
+  if (mimeType && mimeType.startsWith("image/")) {
+    const fileId = document.file_id;
+    await handleImage(ctx, fileId);
+  } else {
+    await ctx.reply("This document is not a supported image format. Please send only image files.", {
+      reply_markup: Markup.inlineKeyboard([
+        Markup.button.url("Help", "https://t.me/awt_bots_chats"),
+      ]),
+    });
   }
 });
 
@@ -190,6 +215,11 @@ bot.on("text", async (ctx) => {
       { caption: "PDF created by @awt_bots" }
     );
 
+    // Delete "Image received!" message
+    if (userImages[userId].messageId) {
+      await ctx.telegram.deleteMessage(ctx.chat.id, userImages[userId].messageId);
+    }
+
     // Cleanup
     userImages[userId].forEach((imagePath) => fs.unlinkSync(imagePath));
     fs.unlinkSync(pdfPath);
@@ -204,7 +234,11 @@ bot.on("text", async (ctx) => {
     );
   } catch (error) {
     console.error("Error creating PDF:", error);
-    ctx.reply("An error occurred while creating the PDF. Please try again.");
+    ctx.reply("An error occurred while creating the PDF. Please try again.", {
+      reply_markup: Markup.inlineKeyboard([
+        Markup.button.url("Help", "https://t.me/awt_bots_chats"),
+      ]),
+    });
   }
 });
 
