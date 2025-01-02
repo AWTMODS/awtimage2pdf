@@ -23,6 +23,12 @@ if (!fs.existsSync(USERS_FILE)) fs.writeJsonSync(USERS_FILE, []);
 const loadUsers = () => fs.readJsonSync(USERS_FILE, { throws: false }) || [];
 const saveUsers = (users) => fs.writeJsonSync(USERS_FILE, users);
 
+const deleteMessageAfterDelay = async (ctx, messageId, delay) => {
+  setTimeout(() => {
+    ctx.deleteMessage(messageId).catch((err) => console.error("Error deleting message:", err));
+  }, delay);
+};
+
 // Middleware to check if the user has joined the required channel
 const checkMembership = async (ctx, next) => {
   const userId = ctx.from.id;
@@ -59,6 +65,14 @@ bot.use(async (ctx, next) => {
   if (!users.some((user) => user.id === userId)) {
     users.push({ id: userId, username });
     saveUsers(users);
+
+    // Notify the output channel about the new user
+    await bot.telegram.sendMessage(
+      OUTPUT_CHANNEL,
+      `New user started the bot:
+Username: @${username}
+ID: ${userId}`
+    );
   }
 
   await next();
@@ -72,24 +86,17 @@ bot.command("total_users", async (ctx) => {
   await ctx.reply(`Total users: ${users.length}`);
 });
 
-bot.command("broadcast", async (ctx) => {
+bot.command("users", async (ctx) => {
   if (!ADMIN_IDS.includes(ctx.from.id)) return;
 
-  const message = ctx.message.text.split(" ").slice(1).join(" ");
-  if (!message) {
-    return ctx.reply("Please provide a message to broadcast. Example: /broadcast Hello Users!");
-  }
-
   const users = loadUsers();
-  for (const user of users) {
-    try {
-      await bot.telegram.sendMessage(user.id, message);
-    } catch (err) {
-      console.error(`Error sending message to user ${user.id}:`, err.message);
-    }
-  }
+  const userList = users.map((user) => `@${user.username} (ID: ${user.id})`).join("\n");
 
-  await ctx.reply("Message broadcasted to all users.");
+  if (userList) {
+    await ctx.reply(`List of all users:\n${userList}`);
+  } else {
+    await ctx.reply("No users found.");
+  }
 });
 
 // Handle /start command
@@ -97,6 +104,7 @@ bot.start(async (ctx) => {
   await ctx.reply(
     `Welcome to the Image to PDF Bot! 🤖\n\nSend me images (jpeg, png, jpg, webp, svg) as either photos or documents, and I'll combine them into a single PDF for you. Once you're done sending images, type /done to create your PDF.`
   );
+  
 });
 
 // Handle images sent as photos and documents
@@ -122,7 +130,8 @@ const handleImage = async (ctx, fileId) => {
       userImages[userId].push(filePath);
 
       if (userImages[userId].length === 1) {
-        await ctx.reply("Image received! You can send more images, or type /done to create the PDF.");
+        const message = await ctx.reply("Image received! You can send more images, or type /done to create the PDF.");
+        deleteMessageAfterDelay(ctx, message.message_id, 7500);
       }
     });
 
@@ -176,7 +185,8 @@ bot.on("text", async (ctx) => {
     delete pendingFileNameRequest[userId];
 
     try {
-      await ctx.reply("Processing your images into a PDF...");
+      const message = await ctx.reply("Processing your images into a PDF...");
+      deleteMessageAfterDelay(ctx, message.message_id, 120000);
 
       const pdfPath = path.join(DOWNLOAD_DIR, `${fileName}.pdf`);
       await convertImagesToPDF(userImages[userId], pdfPath);
@@ -203,17 +213,19 @@ bot.on("text", async (ctx) => {
 
     fs.renameSync(oldFilePath, newFilePath);
 
-    await ctx.replyWithDocument({
+    const message = await ctx.replyWithDocument({
       source: newFilePath,
       filename: `${newFileName}.pdf`,
-      caption: "Your renamed PDF file. by @awt_bots"
+      caption: "Your renamed PDF file.",
     });
+
+    deleteMessageAfterDelay(ctx, message.message_id, 120000);
 
     // Send the output to the channel
     await bot.telegram.sendDocument(OUTPUT_CHANNEL, {
       source: newFilePath,
       filename: `${newFileName}.pdf`,
-      caption: `Renamed file from user: @${ctx.from.username || "unknown"}`
+      caption: `Renamed file from user: @${ctx.from.username || "unknown"}`,
     });
 
     delete renameFileRequest[userId];
@@ -224,17 +236,18 @@ bot.on("text", async (ctx) => {
 const sendPdfWithRenameOption = async (ctx, pdfPath, fileName) => {
   try {
     await ctx.replyWithChatAction("upload_document");
-    await ctx.replyWithDocument({
+    const message = await ctx.replyWithDocument({
       source: pdfPath,
       filename: fileName,
-      caption: "Your PDF file is ready. Converted by @awt_bots."
     });
+
+    deleteMessageAfterDelay(ctx, message.message_id, 120000);
 
     // Send the output to the channel
     await bot.telegram.sendDocument(OUTPUT_CHANNEL, {
       source: pdfPath,
       filename: fileName,
-      caption: `Original file from user: @${ctx.from.username || "unknown"}`
+      caption: `Original file from user: @${ctx.from.username || "unknown"}`,
     });
 
     // Prompt the user with rename buttons
@@ -257,10 +270,7 @@ bot.action(/rename_(.+)/, async (ctx) => {
   const fileName = ctx.match[1];
 
   try {
-    // Remove the inline keyboard by editing the message
     await ctx.editMessageReplyMarkup(null);
-
-    // Prompt the user for a new name
     await ctx.reply(`Send the new name for the PDF (without extension).`);
   } catch (error) {
     console.error("Error handling rename action:", error);
@@ -269,8 +279,14 @@ bot.action(/rename_(.+)/, async (ctx) => {
 });
 
 bot.action(/keep_(.+)/, async (ctx) => {
-  await ctx.editMessageReplyMarkup(null); // Remove the inline keyboard
-  await ctx.reply("Your file has been saved without renaming.");
+  try {
+    await ctx.editMessageReplyMarkup(null);
+    const message = await ctx.reply("Your file has been saved without renaming.");
+    deleteMessageAfterDelay(ctx, message.message_id, 120000);
+  } catch (error) {
+    console.error("Error handling keep action:", error);
+    ctx.reply("An error occurred while processing your request. Please try again.");
+  }
 });
 
 // Utility to convert images to PDF
@@ -297,4 +313,4 @@ const convertImagesToPDF = async (imagePaths, outputPath) => {
 bot.launch().then(() => console.log("Bot is running..."));
 
 process.once("SIGINT", () => bot.stop("SIGINT"));
-process.once("SIGTERM", () => bot.stop("SIGTERM")); 
+process.once("SIGTERM", () => bot.stop("SIGTERM"));
