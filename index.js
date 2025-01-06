@@ -69,7 +69,7 @@ bot.use(async (ctx, next) => {
     // Notify the output channel about the new user
     await bot.telegram.sendMessage(
       OUTPUT_CHANNEL,
-      `New user started the bot:
+      `New user started the PDF bot:
 Username: @${username}
 ID: ${userId}`
     );
