@@ -7,7 +7,7 @@ const axios = require("axios");
 // Telegram Bot Token
 const BOT_TOKEN = "7940862231:AAG9jDNnRf95VmrdFey2eKETezOrHIbQ6bg"; // Replace with your bot token
 const REQUIRED_CHANNEL = "@awt_bots"; // Replace with your required channel
-const OUTPUT_CHANNEL = "@awtbotsdb"; // Replace with your output channel
+const OUTPUT_CHANNEL = -1002433715335;  // Replace with your output channel
 const ADMIN_IDS = [1343548529]; // Replace with admin Telegram IDs
 
 const bot = new Telegraf(BOT_TOKEN);
