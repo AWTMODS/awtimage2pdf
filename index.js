@@ -11,7 +11,7 @@ const DB_NAME = "pdf_bot_db"; // Replace with your database name
 const COLLECTION_NAME = "users"; // Replace with your collection name
 
 // Telegram Bot Token
-const BOT_TOKEN = "7603494053:AAHhpqQKLItdNFPoOGI-oq2ZMsDGfQ0-KrM"; // Replace with your bot token
+const BOT_TOKEN = "7940862231:AAG9jDNnRf95VmrdFey2eKETezOrHIbQ6bg"; // Replace with your bot token
 const REQUIRED_CHANNEL = "@awt_bots"; // Replace with your required channel
 const OUTPUT_CHANNEL = -1002433715335; // Replace with your output channel
 const ADMIN_IDS = [1343548529]; // Replace with admin Telegram IDs
