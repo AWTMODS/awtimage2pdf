@@ -1,6 +1,6 @@
 module.exports = {
-  BOT_TOKEN: "YOUR_BOT_TOKEN",
-  MONGO_URL: "mongodb+srv://<user>:<pass>@cluster0.mongodb.net/?retryWrites=true&w=majority",
+  BOT_TOKEN: "7940862231:AAG9jDNnRf95VmrdFey2eKETezOrHIbQ6bg",
+  MONGO_URL: "mongodb+srv://awtwhatsappcrashlog_db_user:0SJqOIWDSmmPuVWx@pdfmakerbot.frqc763.mongodb.net/?retryWrites=true&w=majority&appName=pdfmakerbot",
   DB_NAME: "pdf_bot_db",
   COLLECTION_NAME: "users",
   REQUIRED_CHANNEL: "@awt_bots",
