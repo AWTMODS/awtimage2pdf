@@ -1,0 +1,8 @@
+{
+  "welcome": "Welcome! Default PDF format will be used. All features included.",
+  "start_custom": "Welcome back! Use /settings to customize your PDF options.",
+  "added_image": "Image added! Send /done when ready to create your PDF.",
+  "no_images": "No images found to generate PDF.",
+  "processing": "Processing your images into a PDF...",
+  "file_saved": "Your file has been saved successfully."
+}
