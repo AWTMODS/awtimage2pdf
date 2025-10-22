@@ -1,32 +1,31 @@
 const { MongoClient } = require("mongodb");
-const { MONGO_URL, DB_NAME } = require("../config/constants");
+const constants = require('../config/constants');
 
 class DatabaseService {
   constructor() {
-    this.client = null;
     this.db = null;
     this.usersCollection = null;
-    this.isConnected = false;
+    this.isDbConnected = false;
   }
 
   async connect() {
     try {
-      this.client = new MongoClient(MONGO_URL);
-      await this.client.connect();
-      this.db = this.client.db(DB_NAME);
+      const client = new MongoClient(constants.MONGO_URL);
+      await client.connect();
+      this.db = client.db(constants.DB_NAME);
       this.usersCollection = this.db.collection('users');
-      this.isConnected = true;
+      this.isDbConnected = true;
       console.log('✅ MongoDB connected successfully');
     } catch (error) {
       console.error('❌ MongoDB connection failed:', error);
-      this.isConnected = false;
+      this.isDbConnected = false;
     }
   }
 
   async saveOrUpdateUser(userId, userData = {}) {
-    if (!this.isConnected) return;
-
     try {
+      if (!this.isDbConnected || !this.usersCollection) return;
+
       await this.usersCollection.updateOne(
         { userId },
         { 
@@ -37,8 +36,7 @@ class DatabaseService {
           $setOnInsert: {
             firstSeen: new Date(),
             pdfsGenerated: 0,
-            lastFiles: [],
-            language: 'en'
+            lastFiles: []
           }
         },
         { upsert: true }
@@ -49,9 +47,9 @@ class DatabaseService {
   }
 
   async incrementUserPDFs(userId, fileName) {
-    if (!this.isConnected) return;
-
     try {
+      if (!this.isDbConnected || !this.usersCollection) return;
+
       await this.usersCollection.updateOne(
         { userId },
         { 
@@ -70,9 +68,8 @@ class DatabaseService {
   }
 
   async getUserStats(userId) {
-    if (!this.isConnected) return null;
-    
     try {
+      if (!this.isDbConnected || !this.usersCollection) return null;
       return await this.usersCollection.findOne({ userId });
     } catch (error) {
       console.error('Error getting user stats:', error);
@@ -81,9 +78,8 @@ class DatabaseService {
   }
 
   async getTotalUsers() {
-    if (!this.isConnected) return 0;
-    
     try {
+      if (!this.isDbConnected || !this.usersCollection) return 0;
       return await this.usersCollection.countDocuments();
     } catch (error) {
       console.error('Error getting total users:', error);
@@ -92,9 +88,8 @@ class DatabaseService {
   }
 
   async getAllUsers() {
-    if (!this.isConnected) return [];
-    
     try {
+      if (!this.isDbConnected || !this.usersCollection) return [];
       return await this.usersCollection.find({}).toArray();
     } catch (error) {
       console.error('Error getting all users:', error);
@@ -103,4 +98,4 @@ class DatabaseService {
   }
 }
 
-module.exports = DatabaseService;
+module.exports = new DatabaseService();

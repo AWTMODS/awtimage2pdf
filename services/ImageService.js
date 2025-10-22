@@ -1,15 +1,11 @@
 const sharp = require("sharp");
 const path = require("path");
-const { DOWNLOAD_DIR } = require("../config/constants");
+const FileService = require('./FileService');
 
 class ImageService {
-  constructor(fileService) {
-    this.fileService = fileService;
-  }
-
   async rotateImage(imagePath, degrees) {
     try {
-      const rotatedPath = path.join(DOWNLOAD_DIR, `rotated_${this.fileService.generateUniqueId()}.jpg`);
+      const rotatedPath = path.join(FileService.downloadDir, `rotated_${FileService.generateUniqueId()}.jpg`);
       await sharp(imagePath)
         .rotate(degrees)
         .toFile(rotatedPath);
@@ -22,7 +18,7 @@ class ImageService {
 
   async enhanceImage(imagePath) {
     try {
-      const enhancedPath = path.join(DOWNLOAD_DIR, `enhanced_${this.fileService.generateUniqueId()}.jpg`);
+      const enhancedPath = path.join(FileService.downloadDir, `enhanced_${FileService.generateUniqueId()}.jpg`);
       await sharp(imagePath)
         .normalize()
         .sharpen()
@@ -34,24 +30,31 @@ class ImageService {
     }
   }
 
-  async processAllImages(images, operation, ...args) {
-    const processedImages = [];
-    for (const imagePath of images) {
-      const processedPath = await this[operation](imagePath, ...args);
-      processedImages.push(processedPath);
-    }
-    return processedImages;
-  }
-
-  async getImageDimensions(imagePath) {
+  async generatePreviewInfo(images) {
     try {
-      const metadata = await sharp(imagePath).metadata();
-      return { width: metadata.width, height: metadata.height };
+      let totalSize = 0;
+      const fs = require("fs").promises;
+      
+      for (const imagePath of images) {
+        try {
+          const stats = await fs.stat(imagePath);
+          totalSize += stats.size;
+        } catch (error) {
+          console.warn('Could not get size for:', imagePath);
+        }
+      }
+
+      const estimatedPdfSize = totalSize * 0.7;
+      const pageCount = images.length;
+
+      return {
+        pageCount,
+        estimatedSize: FileService.formatFileSize(estimatedPdfSize)
+      };
     } catch (error) {
-      console.error('Error getting image dimensions:', error);
-      return { width: 800, height: 600 };
+      return { pageCount: images.length, estimatedSize: 'Unknown' };
     }
   }
 }
 
-module.exports = ImageService;
+module.exports = new ImageService();

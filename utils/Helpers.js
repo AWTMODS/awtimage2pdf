@@ -1,21 +1,20 @@
-class Helpers {
-  static async cleanupOldMessages(bot, userId, messageIds) {
-    if (!messageIds || messageIds.length === 0) return;
+const { Markup } = require("telegraf");
+const SessionService = require('../services/SessionService');
+const DatabaseService = require('../services/DatabaseService');
 
-    for (const messageId of messageIds) {
-      try {
-        await bot.telegram.deleteMessage(userId, messageId);
-        console.log(`🗑️ Auto-deleted old message: ${messageId}`);
-      } catch (error) {
-        if (!error.message.includes('message to delete not found')) {
-          console.log(`⚠️ Could not delete message ${messageId}`);
-        }
-      }
-    }
+class Helpers {
+  constructor() {
+    this.bot = null;
   }
 
-  static async cleanupPreviousMessages(ctx, session, keepLast = 1) {
+  setBotInstance(bot) {
+    this.bot = bot;
+    SessionService.setBotInstance(bot);
+  }
+
+  async cleanupPreviousMessages(ctx, userId, keepLast = 1) {
     try {
+      const session = SessionService.getSession(userId);
       if (!session || !session.messageIds || session.messageIds.length <= keepLast) {
         return;
       }
@@ -39,22 +38,14 @@ class Helpers {
     }
   }
 
-  static async sendMessageWithCleanup(ctx, sessionService, text, extra = {}) {
-    const userId = ctx.from.id;
-    const session = sessionService.getSession(userId);
-
+  async sendMessageWithCleanup(ctx, text, extra = {}) {
     try {
-      await this.cleanupPreviousMessages(ctx, session, 2);
+      await this.cleanupPreviousMessages(ctx, ctx.from.id, 2);
       const message = await ctx.reply(text, { 
         ...extra,
         parse_mode: 'Markdown'
       });
-      
-      const messagesToDelete = session.addMessageId(message.message_id);
-      if (messagesToDelete.length > 0) {
-        this.cleanupOldMessages(ctx.telegram, userId, messagesToDelete);
-      }
-      
+      await SessionService.addMessageToSession(ctx.from.id, message.message_id);
       return message;
     } catch (error) {
       console.error('Error in sendMessageWithCleanup:', error);
@@ -62,7 +53,7 @@ class Helpers {
     }
   }
 
-  static async editMessageWithCleanup(ctx, messageId, text, extra = {}) {
+  async editMessageWithCleanup(ctx, messageId, text, extra = {}) {
     try {
       await ctx.telegram.editMessageText(ctx.chat.id, messageId, null, text, {
         ...extra,
@@ -75,6 +66,32 @@ class Helpers {
       }
     }
   }
+
+  async broadcastMessage(ctx, message, mediaType = 'text') {
+    const users = await DatabaseService.getAllUsers();
+    let success = 0;
+    let failed = 0;
+
+    for (const user of users) {
+      try {
+        if (mediaType === 'text') {
+          await ctx.telegram.sendMessage(user.userId, message);
+        } else if (mediaType === 'photo') {
+          await ctx.telegram.sendPhoto(user.userId, message);
+        } else if (mediaType === 'video') {
+          await ctx.telegram.sendVideo(user.userId, message);
+        }
+        success++;
+      } catch (error) {
+        console.log(`Failed to send to user ${user.userId}:`, error.message);
+        failed++;
+      }
+
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+
+    return { success, failed };
+  }
 }
 
-module.exports = Helpers;
+module.exports = new Helpers();

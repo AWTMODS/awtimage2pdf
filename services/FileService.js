@@ -1,11 +1,11 @@
 const fs = require("fs").promises;
 const path = require("path");
 const axios = require("axios");
-const { DOWNLOAD_DIR } = require("../config/constants");
+const constants = require('../config/constants');
 
 class FileService {
   constructor() {
-    this.downloadDir = DOWNLOAD_DIR;
+    this.downloadDir = constants.DOWNLOAD_DIR;
   }
 
   async ensureDownloadDir() {
@@ -45,16 +45,6 @@ class FileService {
     }
   }
 
-  async cleanupFiles(filePaths) {
-    for (const filePath of filePaths) {
-      try {
-        await fs.unlink(filePath);
-      } catch (error) {
-        // Silently ignore deletion errors
-      }
-    }
-  }
-
   formatFileSize(bytes) {
     if (bytes === 0) return '0 Bytes';
     const k = 1024;
@@ -63,18 +53,39 @@ class FileService {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   }
 
-  async getFileStats(filePaths) {
-    let totalSize = 0;
-    for (const filePath of filePaths) {
-      try {
-        const stats = await fs.stat(filePath);
-        totalSize += stats.size;
-      } catch (error) {
-        console.warn('Could not get size for:', filePath);
+  async cleanupUserImagesOnly(userId, sessionService) {
+    try {
+      const session = sessionService.getSession(userId);
+      if (session && session.images) {
+        for (const imagePath of session.images) {
+          try { await fs.unlink(imagePath); } catch (error) {}
+        }
       }
+      console.log(`🧹 Cleaned up images for user ${userId}`);
+    } catch (error) {
+      console.error('Image cleanup error:', error);
     }
-    return { totalSize, fileCount: filePaths.length };
+  }
+
+  async cleanupUserFiles(userId, sessionService) {
+    try {
+      const session = sessionService.getSession(userId);
+      if (session) {
+        if (session.images) {
+          for (const imagePath of session.images) {
+            try { await fs.unlink(imagePath); } catch (error) {}
+          }
+        }
+        if (session.originalPdfPath) {
+          try { await fs.unlink(session.originalPdfPath); } catch (error) {}
+        }
+      }
+      sessionService.cleanupSession(userId);
+      console.log(`🧹 Cleaned up all files for user ${userId}`);
+    } catch (error) {
+      console.error('Cleanup error:', error);
+    }
   }
 }
 
-module.exports = FileService;
+module.exports = new FileService();

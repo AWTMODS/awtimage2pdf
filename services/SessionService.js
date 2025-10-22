@@ -1,59 +1,90 @@
-const UserSession = require("../models/UserSession");
-
 class SessionService {
   constructor() {
-    this.sessions = new Map();
-    this.broadcastSessions = new Map();
+    this.userSessions = {};
+    this.broadcastSessions = {};
   }
 
   initUserSession(userId) {
     console.log(`🔄 Initializing session for user: ${userId}`);
 
-    if (!this.sessions.has(userId)) {
-      this.sessions.set(userId, new UserSession(userId));
+    if (!this.userSessions[userId]) {
+      this.userSessions[userId] = {
+        images: [],
+        state: 'collecting',
+        language: 'en',
+        settings: {
+          compression: 'medium',
+          watermark: { enabled: false, text: '', position: 'center' },
+          cloudSave: false,
+          imageEdit: { rotated: false, enhanced: false }
+        },
+        createdAt: Date.now(),
+        messageIds: [],
+        lastMessageId: null
+      };
       console.log(`✅ New session created for user: ${userId}`);
     } else {
-      console.log(`✅ Existing session found for user: ${userId}, images: ${this.sessions.get(userId).images.length}`);
+      console.log(`✅ Existing session found for user: ${userId}, images: ${this.userSessions[userId].images.length}`);
     }
 
-    return this.sessions.get(userId);
+    return this.userSessions[userId];
   }
 
   getSession(userId) {
-    return this.sessions.get(userId);
+    return this.userSessions[userId];
   }
 
-  hasSession(userId) {
-    return this.sessions.has(userId);
-  }
-
-  cleanupSession(userId) {
-    const session = this.sessions.get(userId);
-    if (session) {
-      session.reset();
+  updateSessionState(userId, state) {
+    if (this.userSessions[userId]) {
+      this.userSessions[userId].state = state;
     }
   }
 
-  deleteSession(userId) {
-    this.sessions.delete(userId);
-    console.log(`🧹 Session deleted for user: ${userId}`);
+  updateSessionLanguage(userId, language) {
+    if (this.userSessions[userId]) {
+      this.userSessions[userId].language = language;
+    }
   }
 
-  getBroadcastSession(userId) {
-    return this.broadcastSessions.get(userId);
+  async addMessageToSession(userId, messageId) {
+    const session = this.userSessions[userId];
+    if (session) {
+      if (!session.messageIds) {
+        session.messageIds = [];
+      }
+      session.messageIds.push(messageId);
+      session.lastMessageId = messageId;
+
+      if (session.messageIds.length > 20) {
+        const messagesToDelete = session.messageIds.slice(0, -15);
+        session.messageIds = session.messageIds.slice(-15);
+        this.cleanupOldMessages(userId, messagesToDelete).catch(console.error);
+      }
+    }
   }
 
-  setBroadcastSession(userId, data) {
-    this.broadcastSessions.set(userId, data);
+  async cleanupOldMessages(userId, messageIds) {
+    if (!messageIds || messageIds.length === 0) return;
+
+    for (const messageId of messageIds) {
+      try {
+        await this.bot.telegram.deleteMessage(userId, messageId);
+        console.log(`🗑️ Auto-deleted old message: ${messageId}`);
+      } catch (error) {
+        if (!error.message.includes('message to delete not found')) {
+          console.log(`⚠️ Could not delete message ${messageId}`);
+        }
+      }
+    }
   }
 
-  deleteBroadcastSession(userId) {
-    this.broadcastSessions.delete(userId);
+  setBotInstance(bot) {
+    this.bot = bot;
   }
 
-  getAllSessions() {
-    return Array.from(this.sessions.values());
+  cleanupSession(userId) {
+    delete this.userSessions[userId];
   }
 }
 
-module.exports = SessionService;
+module.exports = new SessionService();
