@@ -453,8 +453,8 @@ in the Software without restriction...
 ## 👤 Author
 
 **Aadith C V**
-- Telegram: [@yourusername](https://t.me/artwebtech)
-- GitHub: [@yourusername](https://github.com/AWTMODS)
+- Telegram: [@artwebtech](https://t.me/artwebtech)
+- GitHub: [@awtmods](https://github.com/AWTMODS)
 - Email: aadithaadith20@gmail.com
 
 ---
