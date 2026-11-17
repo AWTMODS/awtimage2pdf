@@ -7,9 +7,14 @@ const Helpers = require('../utils/Helpers');
 const constants = require('../config/constants');
 
 class MessageHandler {
-  constructor(bot) {
+  constructor(bot, actionHandler = null) {
     this.bot = bot;
+    this.actionHandler = actionHandler;
     this.registerMessageHandlers();
+  }
+
+  setActionHandler(actionHandler) {
+    this.actionHandler = actionHandler;
   }
 
   registerMessageHandlers() {
@@ -84,7 +89,17 @@ class MessageHandler {
       await FileService.downloadImage(fileUrl, filePath);
 
       session.images.push(filePath);
+      if (!session.imageFiles) session.imageFiles = [];
+      session.imageFiles.push({
+        fileId: fileId,
+        fileName: fileName,
+        mimeType: mimeType,
+        filePath: filePath,
+        index: session.images.length - 1
+      });
+
       SessionService.updateSessionState(userId, 'collecting');
+      await SessionService.syncSession(userId);
 
       console.log(`✅ ${type} added to session. Total images: ${session.images.length}`);
 
@@ -123,13 +138,21 @@ class MessageHandler {
 
       const reorderedImages = newOrder.map(index => session.images[index]);
       session.images = reorderedImages;
+      if (session.imageFiles && session.imageFiles.length === session.images.length) {
+        session.imageFiles = newOrder.map(index => session.imageFiles[index]);
+      }
       SessionService.updateSessionState(userId, 'awaiting_preview');
+      await SessionService.syncSession(userId);
 
       await Helpers.sendMessageWithCleanup(ctx, Localization.getMessage(session.language, 'reorderSuccess'));
       
-      const ActionHandler = require('./ActionHandler');
-      const actionHandler = new ActionHandler(this.bot);
-      await actionHandler.showPreview(ctx);
+      if (this.actionHandler) {
+        await this.actionHandler.showPreview(ctx);
+      } else {
+        const ActionHandler = require('./ActionHandler');
+        const actionHandler = new ActionHandler(this.bot);
+        await actionHandler.showPreview(ctx);
+      }
 
     } else if (session.state === 'awaiting_watermark_text') {
       const watermarkText = ctx.message.text.trim();
@@ -178,6 +201,7 @@ class MessageHandler {
       try {
         const newPdfPath = require('path').join(FileService.downloadDir, `${newFileName}.pdf`);
 
+        await FileService.ensureSessionImages(ctx, session);
         await PDFService.createPDF(session.images, newPdfPath, session.settings);
 
         const sentMessage = await ctx.replyWithDocument({

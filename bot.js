@@ -1,4 +1,6 @@
 const { Telegraf } = require("telegraf");
+const http = require("http");
+const url = require("url");
 const constants = require('./config/constants');
 const DatabaseService = require('./services/DatabaseService');
 const FileService = require('./services/FileService');
@@ -15,6 +17,8 @@ class PDFBot {
     this.setupHandlers();
     Helpers.setBotInstance(this.bot);
     SessionService.setBotInstance(this.bot);
+    this.server = null;
+    this.isInitialized = false;
   }
 
   setupMiddleware() {
@@ -25,7 +29,7 @@ class PDFBot {
       console.log(`\n📨 [${updateType}] from user: ${userId}`);
 
       if (userId) {
-        SessionService.initUserSession(userId);
+        await SessionService.initUserSessionAsync(userId);
 
         await DatabaseService.saveOrUpdateUser(userId, {
           username: ctx.from.username,
@@ -40,29 +44,99 @@ class PDFBot {
 
   setupHandlers() {
     // Setup command handlers
-    new CommandHandler(this.bot);
+    this.commandHandler = new CommandHandler(this.bot);
 
     // Setup action handlers
-    new ActionHandler(this.bot);
+    this.actionHandler = new ActionHandler(this.bot);
 
     // Setup message handlers
-    new MessageHandler(this.bot);
+    this.messageHandler = new MessageHandler(this.bot, this.actionHandler);
 
     // Error handling
     this.bot.catch((err, ctx) => {
       console.error(`❌ Bot error for ${ctx.updateType}:`, err);
-      ctx.reply("❌ An error occurred. Please try again.");
+      try {
+        ctx.reply("❌ An error occurred. Please try again.");
+      } catch (e) {}
     });
+  }
+
+  async init() {
+    if (this.isInitialized) return;
+    await FileService.ensureDownloadDir();
+    await DatabaseService.connect();
+    console.log('📁 Download directory ready');
+    this.isInitialized = true;
   }
 
   async start() {
     try {
-      await FileService.ensureDownloadDir();
-      await DatabaseService.connect();
-      console.log('📁 Download directory ready');
-      
-      await this.bot.launch();
-      console.log('🤖 PDF Bot is running successfully!');
+      await this.init();
+
+      let webhookUrl = constants.WEBHOOK_URL;
+      const port = constants.PORT;
+
+      if (webhookUrl) {
+        // Normalize webhook URL: if it doesn't have a path, append WEBHOOK_PATH
+        const parsedUrl = new URL(webhookUrl);
+        let webhookPath = parsedUrl.pathname;
+        if (!webhookPath || webhookPath === '/') {
+          webhookPath = constants.WEBHOOK_PATH;
+          parsedUrl.pathname = webhookPath;
+          webhookUrl = parsedUrl.toString();
+        }
+
+        console.log(`🌐 Starting bot in WEBHOOK mode (no VPS required)...`);
+        console.log(`🔗 Setting Telegram Webhook to: ${webhookUrl}`);
+
+        const webhookOptions = {};
+        if (constants.SECRET_TOKEN) {
+          webhookOptions.secret_token = constants.SECRET_TOKEN;
+        }
+
+        await this.bot.telegram.setWebhook(webhookUrl, webhookOptions);
+        console.log('✅ Telegram webhook set successfully');
+
+        const webhookCallback = this.bot.webhookCallback(webhookPath, {
+          secretToken: constants.SECRET_TOKEN || undefined
+        });
+
+        // Start HTTP server for Webhook and Health check
+        this.server = http.createServer((req, res) => {
+          const reqParsed = url.parse(req.url, true);
+
+          // Health check endpoints (for Render, Koyeb, UptimeRobot, etc.)
+          if (req.method === 'GET' && (reqParsed.pathname === '/' || reqParsed.pathname === '/health')) {
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+              status: 'online',
+              bot: 'AWT Image to PDF Bot',
+              mode: 'webhook',
+              webhookUrl: webhookUrl,
+              timestamp: new Date().toISOString()
+            }));
+            return;
+          }
+
+          // Handle webhook requests
+          webhookCallback(req, res);
+        });
+
+        this.server.listen(port, () => {
+          console.log(`🚀 Webhook server listening on port ${port}`);
+          console.log(`📡 Webhook endpoint path: ${webhookPath}`);
+          console.log('🤖 PDF Bot is running successfully without VPS!');
+        });
+
+      } else {
+        console.log('🔄 No WEBHOOK_URL configured. Launching in POLLING mode...');
+        // Drop any previous webhook so polling doesn't conflict
+        try {
+          await this.bot.telegram.deleteWebhook({ drop_pending_updates: false });
+        } catch (e) {}
+        await this.bot.launch();
+        console.log('🤖 PDF Bot is running successfully in polling mode!');
+      }
 
       // Graceful shutdown
       process.once('SIGINT', () => this.shutdown('SIGINT'));
@@ -76,11 +150,29 @@ class PDFBot {
 
   shutdown(signal) {
     console.log(`\n${signal} received. Shutting down gracefully...`);
+    if (this.server) {
+      this.server.close(() => {
+        console.log('HTTP server closed.');
+      });
+    }
     this.bot.stop(signal);
   }
 }
 
-// Start the bot
-console.log('🚀 Starting PDF Bot...');
-const bot = new PDFBot();
-bot.start();
+// Singleton helper for serverless / imports
+let botInstance = null;
+function getBotInstance() {
+  if (!botInstance) {
+    botInstance = new PDFBot();
+  }
+  return botInstance;
+}
+
+// If executed directly from CLI (node bot.js), start it
+if (require.main === module) {
+  console.log('🚀 Starting PDF Bot...');
+  const bot = getBotInstance();
+  bot.start();
+}
+
+module.exports = { PDFBot, getBotInstance };

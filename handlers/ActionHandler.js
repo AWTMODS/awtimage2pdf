@@ -158,6 +158,11 @@ class ActionHandler {
   async showPreview(ctx) {
     const userId = ctx.from.id;
     const session = SessionService.getSession(userId);
+    if (!session) {
+      return await Helpers.sendMessageWithCleanup(ctx, Localization.getMessage('en', 'noSession'));
+    }
+
+    await FileService.ensureSessionImages(ctx, session);
     const previewInfo = await ImageService.generatePreviewInfo(session.images);
 
     const previewMessage = `
@@ -234,6 +239,7 @@ ${Localization.getMessage(session.language, 'securityScan')}`.trim();
     }
     await ctx.answerCbQuery();
     await Helpers.sendMessageWithCleanup(ctx, `🔄 Rotating images by ${degrees} degrees...`);
+    await FileService.ensureSessionImages(ctx, session);
     const rotatedImages = [];
     for (const imagePath of session.images) {
       const rotatedPath = await ImageService.rotateImage(imagePath, degrees);
@@ -241,6 +247,7 @@ ${Localization.getMessage(session.language, 'securityScan')}`.trim();
     }
     session.images = rotatedImages;
     session.settings.imageEdit.rotated = true;
+    await SessionService.syncSession(userId);
     await Helpers.sendMessageWithCleanup(ctx, `✅ All images rotated by ${degrees} degrees!`);
     await this.showPreview(ctx);
   }
@@ -254,6 +261,7 @@ ${Localization.getMessage(session.language, 'securityScan')}`.trim();
     }
     await ctx.answerCbQuery();
     await Helpers.sendMessageWithCleanup(ctx, "✨ Enhancing images...");
+    await FileService.ensureSessionImages(ctx, session);
     const enhancedImages = [];
     for (const imagePath of session.images) {
       const enhancedPath = await ImageService.enhanceImage(imagePath);
@@ -261,6 +269,7 @@ ${Localization.getMessage(session.language, 'securityScan')}`.trim();
     }
     session.images = enhancedImages;
     session.settings.imageEdit.enhanced = true;
+    await SessionService.syncSession(userId);
     await Helpers.sendMessageWithCleanup(ctx, Localization.getMessage(session.language, 'enhanceApplied'));
     await this.showPreview(ctx);
   }
@@ -391,6 +400,8 @@ ${Localization.getMessage(session.language, 'securityScan')}`.trim();
     let progress = null;
 
     try {
+      await FileService.ensureSessionImages(ctx, session);
+
       progress = new ProgressAnimation(
         ctx, 
         session.images.length + 2,

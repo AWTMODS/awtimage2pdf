@@ -2,6 +2,7 @@ class UserSession {
   constructor(userId) {
     this.userId = userId;
     this.images = [];
+    this.imageFiles = [];
     this.state = 'collecting';
     this.language = 'en';
     this.settings = {

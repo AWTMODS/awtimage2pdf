@@ -4,6 +4,11 @@
   "description": "",
   "main": "bot.js",
   "scripts": {
+    "start": "node bot.js",
+    "dev": "node bot.js",
+    "set-webhook": "node scripts/setWebhook.js",
+    "delete-webhook": "node scripts/setWebhook.js delete",
+    "webhook-info": "node scripts/setWebhook.js info",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],

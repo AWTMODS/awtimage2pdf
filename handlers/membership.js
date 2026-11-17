@@ -1,4 +1,5 @@
-const { REQUIRED_CHANNEL } = require("../config/config");
+const constants = require("../config/constants");
+const REQUIRED_CHANNEL = constants.CLOUD_CHANNEL || "@database_awt";
 const { Markup } = require("telegraf");
 
 async function checkMembership(ctx, next) {

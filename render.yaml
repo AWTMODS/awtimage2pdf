@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: awtimage2pdf
+    env: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: BOT_TOKEN
+        sync: false
+      - key: MONGO_URL
+        sync: false
+      - key: CLOUD_CHANNEL
+        value: "@database_awt"
+      - key: MAX_IMAGES
+        value: "50"

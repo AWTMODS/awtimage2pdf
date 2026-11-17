@@ -40,11 +40,11 @@ A powerful Telegram bot that converts images into high-quality PDF documents wit
 
 ### Prerequisites
 
-- Node.js 16 or higher
-- MongoDB Atlas account (or local MongoDB)
+- Node.js 18 or higher
+- MongoDB Atlas account (Free tier)
 - Telegram Bot Token from [@BotFather](https://t.me/botfather)
 
-### Installation
+### Local Development (Polling Mode)
 
 1. **Clone the repository**
    ```bash
@@ -58,8 +58,7 @@ A powerful Telegram bot that converts images into high-quality PDF documents wit
    ```
 
 3. **Configure environment variables**
-   
-   Create a `.env` file in the root directory:
+   Create a `.env` file in the root directory (see `.env.example`):
    ```env
    BOT_TOKEN=your_telegram_bot_token_here
    MONGO_URL=your_mongodb_connection_string
@@ -67,8 +66,68 @@ A powerful Telegram bot that converts images into high-quality PDF documents wit
 
 4. **Run the bot**
    ```bash
-   node bot.js
+   npm start
    ```
+
+---
+
+## 🌐 Deploy Without VPS (Webhook Mode)
+
+This bot is fully optimized to run **100% free without any VPS** using Telegram Webhooks on serverless or cloud platforms. User sessions are persisted to MongoDB, and missing images in ephemeral containers are automatically recovered on-the-fly from Telegram!
+
+### Option 1: Render.com (Recommended - 100% Free Web Service)
+
+1. Fork or push this repository to your GitHub account.
+2. Sign in to [Render.com](https://render.com) and click **New + > Web Service**.
+3. Connect your GitHub repository.
+4. Set the following:
+   - **Environment:** `Node`
+   - **Build Command:** `npm install`
+   - **Start Command:** `npm start`
+5. Under **Environment Variables**, add:
+   - `BOT_TOKEN`: Your Telegram Bot token from @BotFather
+   - `MONGO_URL`: Your MongoDB Atlas connection string
+   - `WEBHOOK_PATH`: `/webhook` (optional, defaults to `/webhook`)
+6. Click **Create Web Service**.
+7. Render automatically assigns a free HTTPS URL (`https://your-service.onrender.com`) and passes `RENDER_EXTERNAL_URL`. The bot will automatically register the Telegram webhook on startup!
+8. Health check endpoint (`GET /` or `GET /health`) is built-in to prevent cold sleeps with services like UptimeRobot.
+
+### Option 2: Vercel (100% Free Serverless)
+
+1. Install Vercel CLI or import the repository in [Vercel Dashboard](https://vercel.com).
+2. Add Environment Variables in project settings:
+   - `BOT_TOKEN`
+   - `MONGO_URL`
+3. Deploy!
+4. Once deployed, link your Telegram webhook by visiting:
+   ```
+   https://your-app.vercel.app/api/webhook?setWebhook=true
+   ```
+   *(Or run `npm run set-webhook https://your-app.vercel.app/api/webhook` from your terminal)*
+
+### Option 3: Koyeb / Railway / Fly.io (Docker)
+
+Use the included `Dockerfile`:
+```bash
+# Build & run with Docker
+docker build -t awtimage2pdf .
+docker run -p 3000:3000 -e BOT_TOKEN=xxx -e MONGO_URL=xxx -e WEBHOOK_URL=https://your-domain.com/webhook awtimage2pdf
+```
+
+### Webhook Management CLI
+
+Manage your Telegram webhook anytime using the built-in CLI:
+
+```bash
+# Check current webhook status
+npm run webhook-info
+
+# Set webhook to custom URL
+node scripts/setWebhook.js https://your-domain.com/webhook
+
+# Delete webhook (switches back to polling)
+npm run delete-webhook
+```
 
 ---
 
